@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:ui="http://java.sun.com/jsf/facelets"
+                xmlns:h="http://java.sun.com/jsf/html"
+                template="WEB-INF/templates/template.xhtml">
+
+    <ui:define name="mainarea">
+        <h:outputText value="Car Details" styleClass="carsTitle"/>
+        <h:panelGrid columns="2" styleClass="innerContent">
+            <h:outputLabel value="Car Number Plate:" /><h:outputText value="#{carManager.car.numberPlate}" />
+            <h:outputLabel value="Country:" /><h:outputText value="#{carManager.car.country}" />
+            <h:outputLabel value="Brand:" /><h:outputText value="#{carManager.car.brand}" />
+            <h:outputLabel value="Color:" /><h:outputText value="#{carManager.car.color}" />
+            <h:outputLabel value="Displacement [l]:" /><h:outputText value="#{carManager.car.displacement}" />
+            <h:outputLabel value="Type:" /><h:outputText value="#{carManager.car.type}" />
+        </h:panelGrid>
+    </ui:define>
+
+</ui:composition>

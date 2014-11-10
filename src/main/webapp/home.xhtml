@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:ui="http://java.sun.com/jsf/facelets"
+                xmlns:h="http://java.sun.com/jsf/html"
+                template="WEB-INF/templates/template.xhtml">
+
+    <ui:define name="mainarea">
+        <h:outputText value="List of available cars" styleClass="carsTitle"/>
+        <h:dataTable value="#{carManager.carList}" var="car"
+                     styleClass="innerContent" columnClasses="numberPlate,link,link">
+            <h:column>
+                #{car}
+            </h:column>
+            <h:column>
+                &#xA0;
+                <h:commandLink value="View" action="#{carManager.showCarDetails(car)}" />
+            </h:column>
+            <h:column>
+                &#xA0;
+                <h:commandLink value="Remove" action="#{carManager.removeCar(car)}" />
+            </h:column>
+        </h:dataTable>
+    </ui:define>
+
+</ui:composition>
