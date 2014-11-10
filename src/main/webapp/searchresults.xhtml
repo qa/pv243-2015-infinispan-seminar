@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui:composition xmlns="http://www.w3.org/1999/xhtml"
+                xmlns:ui="http://java.sun.com/jsf/facelets"
+                xmlns:h="http://java.sun.com/jsf/html"
+                template="WEB-INF/templates/template.xhtml">
+
+    <ui:define name="mainarea">
+        <h:outputText value="Search results" styleClass="carsTitle" rendered="true"/>
+        <h:dataTable value="#{carManager.searchResults}" var="car" styleClass="innerContent" columnClasses="car,cardetails">
+            <h:column>
+                #{car.brand} &#xA0;
+            </h:column>
+            <h:column>
+                #{car.color},&#xA0; #{car.displacement},&#xA0;#{car.type},&#xA0;#{car.country},&#xA0;#{car.numberPlate}
+            </h:column>
+        </h:dataTable>
+
+    </ui:define>
+
+</ui:composition>

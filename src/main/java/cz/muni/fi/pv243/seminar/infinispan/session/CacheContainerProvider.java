@@ -34,6 +34,10 @@ import org.infinispan.configuration.global.GlobalConfiguration;
 import org.infinispan.configuration.global.GlobalConfigurationBuilder;
 import org.infinispan.eviction.EvictionStrategy;
 import org.infinispan.manager.DefaultCacheManager;
+import org.infinispan.transaction.LockingMode;
+import org.infinispan.transaction.TransactionMode;
+import org.infinispan.transaction.lookup.GenericTransactionManagerLookup;
+import org.infinispan.util.concurrent.IsolationLevel;
 
 /**
  * Implementation of {@link CacheContainerProvider} creating a programmatically configured DefaultCacheManager.
@@ -43,7 +47,6 @@ import org.infinispan.manager.DefaultCacheManager;
  */
 @ApplicationScoped
 public class CacheContainerProvider {
-
     private Logger log = Logger.getLogger(this.getClass().getName());
 
     private BasicCacheContainer manager;
@@ -56,14 +59,23 @@ public class CacheContainerProvider {
                     .jmxDomain("org.infinispan.carmart")  //prevent collision with non-transactional carmart
                     .build();
 
-            Configuration loc = new ConfigurationBuilder()
-                    .jmxStatistics().enable()
+            Configuration defaultConfig = new ConfigurationBuilder()
+                    .transaction().transactionMode(TransactionMode.TRANSACTIONAL)
+                    .build();  //default config
+
+            Configuration carCacheConfig = new ConfigurationBuilder().jmxStatistics().enable()
                     .clustering().cacheMode(CacheMode.LOCAL)
+                    .transaction().transactionMode(TransactionMode.TRANSACTIONAL).autoCommit(false)
+                    .lockingMode(LockingMode.OPTIMISTIC).transactionManagerLookup(new GenericTransactionManagerLookup())
+                    .locking().isolationLevel(IsolationLevel.REPEATABLE_READ)
                     .eviction().maxEntries(4).strategy(EvictionStrategy.LRU)
                     .persistence().passivation(true).addSingleFileStore().purgeOnStartup(true)
+                    .indexing().enable().addProperty("default.directory_provider", "ram")
                     .build();
 
-            manager = new DefaultCacheManager(glob, loc, true); //true means start the cache manager immediately
+            manager = new DefaultCacheManager(glob, defaultConfig);
+            ((DefaultCacheManager) manager).defineConfiguration(CarManager.CAR_CACHE_NAME, carCacheConfig);
+            manager.start();
             log.info("=== Using DefaultCacheManager (library mode) ===");
         }
         return manager;

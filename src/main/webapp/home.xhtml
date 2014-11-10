@@ -5,7 +5,7 @@
                 template="WEB-INF/templates/template.xhtml">
 
     <ui:define name="mainarea">
-        <h:outputText value="List of available cars" styleClass="carsTitle"/>
+        <h:outputText value="List of available cars" styleClass="carsTitle" rendered="#{not carManager.searchActive}"/>
         <h:dataTable value="#{carManager.carList}" var="car"
                      styleClass="innerContent" columnClasses="numberPlate,link,link">
             <h:column>

@@ -26,13 +26,18 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.enterprise.inject.Model;
 import javax.inject.Inject;
+import javax.transaction.UserTransaction;
 
+import org.infinispan.Cache;
 import org.infinispan.commons.api.BasicCache;
+import org.infinispan.query.Search;
 
 import cz.muni.fi.pv243.seminar.infinispan.model.Car;
+import org.infinispan.query.dsl.*;
 
 /**
  * Adds, retrieves, removes new cars from the cache. Also returns a list of cars stored in the cache.
@@ -42,47 +47,48 @@ import cz.muni.fi.pv243.seminar.infinispan.model.Car;
 @Model
 public class CarManager {
 
-    public static final String CACHE_NAME = "carcache";
+    public static final String CAR_CACHE_NAME = "carcache";
+    public static final String CAR_LIST_CACHE_NAME = "carlist";
     public static final String CAR_NUMBERS_KEY = "carnumbers";
 
     @Inject
     private CacheContainerProvider provider;
 
-    private BasicCache<String, Object> carCache;
+    @Inject
+    private UserTransaction utx;
 
+    private BasicCache<String, Object> carCache;
+    private BasicCache<String, Object> carListCache;
+    private List<Car> searchResults;
     private String carId;
     private Car car = new Car();
+    private boolean matchAll;
 
     public CarManager() {
     }
 
     public String addNewCar() {
-        carCache = provider.getCacheContainer().getCache(CACHE_NAME);
+        carCache = provider.getCacheContainer().getCache(CAR_CACHE_NAME);
+        carListCache = provider.getCacheContainer().getCache(CarManager.CAR_LIST_CACHE_NAME);
 
-        List<String> carNumbers = getNumberPlateList(carCache);
-        carNumbers.add(car.getNumberPlate());
+        try {
+            utx.begin();
 
-        carCache.put(CAR_NUMBERS_KEY, carNumbers);
-        carCache.put(CarManager.encode(car.getNumberPlate()), car);
+            List<String> carNumbers = getNumberPlateList(carListCache);
+            carNumbers.add(car.getNumberPlate());
 
-        return "home";
-    }
+            carListCache.put(CAR_NUMBERS_KEY, carNumbers);
+            carCache.put(CarManager.encode(car.getNumberPlate()), car);
 
-    public String addNewCarWithRollback() {
-        boolean throwInducedException = true;
-
-        carCache = provider.getCacheContainer().getCache(CACHE_NAME);
-
-        List<String> carNumbers = getNumberPlateList(carCache);
-        carNumbers.add(car.getNumberPlate());
-
-        // store the new list of car numbers and then throw an exception -> roll-back
-        // the car number list should not be stored in the cache
-        carCache.put(CAR_NUMBERS_KEY, carNumbers);
-        if (throwInducedException) {
-            throw new RuntimeException("Induced exception");
+            utx.commit();
+        } catch (Exception e) {
+            if (utx != null) {
+                try {
+                    utx.rollback();
+                } catch (Exception e1) {
+                }
+            }
         }
-        carCache.put(CarManager.encode(car.getNumberPlate()), car);
 
         return "home";
     }
@@ -91,13 +97,13 @@ public class CarManager {
      * Operate on a clone of car number list
      */
     @SuppressWarnings("unchecked")
-    private List<String> getNumberPlateList(BasicCache<String, Object> carCacheLoc) {
-        List<String> carNumberList = (List<String>) carCacheLoc.get(CAR_NUMBERS_KEY);
+    private List<String> getNumberPlateList(BasicCache<String, Object> carListCacheLoc) {
+        List<String> carNumberList = (List<String>) carListCacheLoc.get(CAR_NUMBERS_KEY);
         return carNumberList == null ? new LinkedList<>() : new LinkedList<>(carNumberList);
     }
 
     public String showCarDetails(String numberPlate) {
-        carCache = provider.getCacheContainer().getCache(CACHE_NAME);
+        carCache = provider.getCacheContainer().getCache(CAR_CACHE_NAME);
         this.car = (Car) carCache.get(encode(numberPlate));
 
         return "showdetails";
@@ -105,19 +111,43 @@ public class CarManager {
 
     public List<String> getCarList() {
         // retrieve a cache
-        carCache = provider.getCacheContainer().getCache(CACHE_NAME);
+        carListCache = provider.getCacheContainer().getCache(CarManager.CAR_LIST_CACHE_NAME);
         // retrieve a list of number plates from the cache
-        return getNumberPlateList(carCache);
+        return getNumberPlateList(carListCache);
+    }
+
+    public String clearSearchResults() {
+        searchResults = null;
+        return "home";
+    }
+
+    public boolean isSearchActive() {
+        return searchResults != null;
     }
 
     public String removeCar(String numberPlate) {
-        carCache = provider.getCacheContainer().getCache(CACHE_NAME);
-        carCache.remove(encode(numberPlate));
+        carCache = provider.getCacheContainer().getCache(CAR_CACHE_NAME);
+        carListCache = provider.getCacheContainer().getCache(CarManager.CAR_LIST_CACHE_NAME);
 
-        List<String> carNumbers = getNumberPlateList(carCache);
-        carNumbers.remove(numberPlate);
+        try {
+            utx.begin();
 
-        carCache.put(CAR_NUMBERS_KEY, carNumbers);
+            carCache.remove(encode(numberPlate));
+
+            List<String> carNumbers = getNumberPlateList(carListCache);
+            carNumbers.remove(numberPlate);
+
+            carListCache.put(CAR_NUMBERS_KEY, carNumbers);
+
+            utx.commit();
+        } catch (Exception e) {
+            if (utx != null) {
+                try {
+                    utx.rollback();
+                } catch (Exception e1) {
+                }
+            }
+        }
 
         return null;
     }
@@ -138,6 +168,14 @@ public class CarManager {
         return car;
     }
 
+    public boolean isMatchAll() {
+        return matchAll;
+    }
+
+    public void setMatchAll(boolean matchAll) {
+        this.matchAll = matchAll;
+    }
+
     public static String encode(String key) {
         try {
             return URLEncoder.encode(key, "UTF-8");
@@ -152,5 +190,29 @@ public class CarManager {
         } catch (UnsupportedEncodingException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public String search() {
+        carCache = provider.getCacheContainer().getCache(CAR_CACHE_NAME);
+        QueryFactory qf = Search.getQueryFactory((Cache) carCache);
+
+        // match any parameter
+        Query q = crateMatchAnyQuery(qf);
+
+        // invoke the cache query
+        searchResults = q.list().stream().filter(o -> o instanceof Car).map(o -> (Car) o).collect(Collectors.toList());
+        return "searchresults";
+    }
+
+    // TODO: create the query using QueryFactory from Infinispan
+    private Query crateMatchAnyQuery(QueryFactory qf) {
+        Query q = null;
+        System.out.println("Infinispan Query DSL: " + q.toString() );
+
+        return q;
+    }
+
+    public List<Car> getSearchResults() {
+        return searchResults;
     }
 }

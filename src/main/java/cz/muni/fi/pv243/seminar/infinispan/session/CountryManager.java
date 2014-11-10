@@ -21,6 +21,8 @@
  */
 package cz.muni.fi.pv243.seminar.infinispan.session;
 
+import java.util.Arrays;
+
 import javax.enterprise.inject.Produces;
 import javax.inject.Named;
 
@@ -36,6 +38,13 @@ public class CountryManager {
     @Produces
     @Named
     public Country[] getCountries() {
+        // do not include first item (Unused)
+        return Arrays.copyOfRange(Country.values(), 1, Country.values().length);
+    }
+
+    @Produces
+    @Named
+    public Country[] getCountriesForSearch() {
         return Country.values();
     }
 }
