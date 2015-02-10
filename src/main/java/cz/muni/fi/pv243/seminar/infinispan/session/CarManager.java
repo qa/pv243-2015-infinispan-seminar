@@ -206,7 +206,11 @@ public class CarManager {
 
     // TODO: create the query using QueryFactory from Infinispan
     private Query crateMatchAnyQuery(QueryFactory qf) {
-        Query q = null;
+        Query q = qf.from(Car.class)
+                    .having("brand").like("%" + (car.getBrand().isEmpty() ? "donotmatch" : car.getBrand()) + "%")
+                    .or().having("color").like("%" + (car.getColor().isEmpty() ? "donotmatch" : car.getColor()) + "%")
+                    .or().having("country").eq(car.getCountry().toString())
+                    .toBuilder().build();
         System.out.println("Infinispan Query DSL: " + q.toString() );
 
         return q;
